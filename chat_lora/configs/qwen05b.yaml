@@ -1,0 +1,34 @@
+model:
+  base: Qwen/Qwen2.5-0.5B-Instruct
+  bf16: true
+
+data:
+  name: daily_dialog
+  max_train_examples: 20000
+  max_val_examples: 1500
+  max_test_examples: 1500
+  max_seq_len: 512
+  seed: 0
+
+lora:
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+
+train:
+  batch_size: 4
+  eval_batch_size: 4
+  grad_accum: 4
+  lr: 2.0e-4
+  weight_decay: 0.0
+  clip: 1.0
+  warmup_steps: 50
+  epochs: 1
+  max_steps: 0
+  quick_max_steps: 200
+  log_steps: 20
+  eval_steps: 300
+  gradient_checkpointing: true
+  num_workers: 2
+  out_dir: chat_lora/runs/qwen05b

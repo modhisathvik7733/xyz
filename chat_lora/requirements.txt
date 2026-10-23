@@ -1,0 +1,6 @@
+# Install torch with CUDA first if the Vast image does not already provide it.
+torch>=2.1
+transformers>=4.45
+peft>=0.10
+datasets>=2.19
+PyYAML>=6.0
