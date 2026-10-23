@@ -1,7 +1,7 @@
 """Data formatting for the general-English LoRA chat track.
 
 This is deliberately not the template model.  It fine-tunes a small pretrained
-Transformer on real DailyDialog conversations and evaluates on held-out
+Transformer on real UltraChat conversations and evaluates on held-out
 dialogues.  The base model supplies general English; LoRA adapts its style.
 """
 
@@ -25,7 +25,7 @@ class DialoguePair:
 
 
 def extract_pairs(dialog: Iterable[str], max_pairs: Optional[int] = None) -> list[DialoguePair]:
-    """Turn one alternating DailyDialog dialogue into user/assistant pairs."""
+    """Turn one alternating dialogue into user/assistant pairs."""
     clean = [str(text).strip() for text in dialog if str(text).strip()]
     pairs: list[DialoguePair] = []
     for index in range(1, len(clean), 2):
@@ -42,6 +42,25 @@ def pairs_from_dataset(dataset, max_examples: int, seed: int = 0) -> list[Dialog
     rng = random.Random(seed)
     rng.shuffle(pairs)
     return pairs[:max_examples]
+
+
+def pairs_from_messages(dataset, max_examples: int = 0, seed: int = 0) -> list[DialoguePair]:
+    """Extract user->assistant pairs from a messages-format dataset."""
+    pairs: list[DialoguePair] = []
+    for row in dataset:
+        messages = row.get("messages") or []
+        for index in range(len(messages) - 1):
+            current, following = messages[index], messages[index + 1]
+            if current.get("role") == "user" and following.get("role") == "assistant":
+                user = str(current.get("content", "")).strip()
+                assistant = str(following.get("content", "")).strip()
+                if user and assistant:
+                    pairs.append(DialoguePair(user, assistant))
+    rng = random.Random(seed)
+    rng.shuffle(pairs)
+    if max_examples and max_examples > 0:
+        pairs = pairs[:max_examples]
+    return pairs
 
 
 def format_prompt(tokenizer, user: str, history: Optional[list[dict]] = None) -> str:
@@ -118,20 +137,25 @@ def make_datasets(config: dict, tokenizer, quick: bool = False):
     from datasets import load_dataset
 
     data_cfg = config["data"]
-    raw = load_dataset(data_cfg.get("name", "daily_dialog"))
-    train_pairs = pairs_from_dataset(
-        raw["train"], data_cfg.get("max_train_examples", 40_000), data_cfg.get("seed", 0)
+    name = data_cfg.get("name", "HuggingFaceH4/ultrachat_200k")
+    train_raw = load_dataset(name, split=data_cfg.get("split_train", "train_sft"))
+    test_raw = load_dataset(name, split=data_cfg.get("split_test", "test_sft"))
+
+    all_train = pairs_from_messages(
+        train_raw, data_cfg.get("max_train_examples", 20_000) + data_cfg.get("max_val_examples", 1_500),
+        data_cfg.get("seed", 0),
     )
-    val_pairs = pairs_from_dataset(
-        raw["validation"], data_cfg.get("max_val_examples", 2_000), data_cfg.get("seed", 1)
-    )
-    test_pairs = pairs_from_dataset(
-        raw["test"], data_cfg.get("max_test_examples", 2_000), data_cfg.get("seed", 2)
+    test_pairs = pairs_from_messages(
+        test_raw, data_cfg.get("max_test_examples", 1_500), data_cfg.get("seed", 2)
     )
     if quick:
-        train_pairs = train_pairs[:2_000]
-        val_pairs = val_pairs[:200]
+        all_train = all_train[:2_200]
         test_pairs = test_pairs[:300]
+
+    val_count = min(data_cfg.get("max_val_examples", 1_500), max(1, len(all_train) // 10))
+    val_pairs = all_train[-val_count:]
+    train_pairs = all_train[:-val_count]
+    train_pairs = train_pairs[: data_cfg.get("max_train_examples", 20_000)]
     max_len = data_cfg.get("max_seq_len", 512)
     train = DialogueDataset(train_pairs, tokenizer, max_len)
     val = DialogueDataset(val_pairs, tokenizer, max_len)

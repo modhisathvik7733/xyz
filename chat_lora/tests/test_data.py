@@ -1,6 +1,6 @@
 import unittest
 
-from chat_lora.data import DialoguePair, PadCollator, encode_example, extract_pairs
+from chat_lora.data import DialoguePair, PadCollator, encode_example, extract_pairs, pairs_from_messages
 
 
 class FakeTokenizer:
@@ -27,6 +27,20 @@ class DataTests(unittest.TestCase):
         self.assertEqual(pairs[0].user, "hello there")
         self.assertEqual(pairs[0].assistant, "hi how are you")
         self.assertEqual(pairs[1].user, "i am fine")
+
+    def test_pairs_from_messages(self):
+        dataset = [
+            {"messages": [
+                {"role": "user", "content": "hello"},
+                {"role": "assistant", "content": "hi there"},
+                {"role": "user", "content": "how are you"},
+                {"role": "assistant", "content": "i am fine"},
+            ]}
+        ]
+        pairs = pairs_from_messages(dataset)
+        self.assertEqual(len(pairs), 2)
+        self.assertEqual(pairs[0].assistant, "hi there")
+        self.assertEqual(pairs[1].user, "how are you")
 
     def test_encode_masks_prompt(self):
         tokenizer = FakeTokenizer()

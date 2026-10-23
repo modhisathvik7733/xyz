@@ -6,7 +6,7 @@ it cannot generalize like a Transformer. No amount of retraining that tiny
 closed-world model will make it a general English speaker.
 
 This track uses a **small pretrained Transformer** — Qwen2.5-0.5B-Instruct — and
-LoRA fine-tunes it on **real DailyDialog conversations**. The base model supplies
+LoRA fine-tunes it on **real UltraChat conversations**. The base model supplies
 general English; LoRA adapts the style to short, friendly, simple replies.
 
 This is **not** the from-scratch concept-learning experiment. It is the honest
@@ -68,7 +68,7 @@ Commands: `:quit`, `:reset`.
 
 ## What is measured
 
-- Real DailyDialog train/validation/test splits.
+- Real UltraChat train/test splits; a held-out slice of train is used for validation.
 - Held-out validation and test **loss/perplexity** before and after LoRA.
 - Generated held-out samples in `report.md`.
 - No template test set is used here.
@@ -95,6 +95,6 @@ not claim to replace it.
 
 The 0.5B model in bf16 plus LoRA fits comfortably in 20GB with batch 4,
 gradient accumulation 4, and gradient checkpointing. The default run uses 20k
-DailyDialog pairs for one epoch; the quick run uses 2k pairs and 200 steps.
+UltraChat pairs for one epoch; the quick run uses 2k pairs and 200 steps.
 
 If you hit OOM, reduce `train.batch_size` to 2 and increase `train.grad_accum`.

@@ -3,7 +3,9 @@ model:
   bf16: true
 
 data:
-  name: daily_dialog
+  name: HuggingFaceH4/ultrachat_200k
+  split_train: train_sft
+  split_test: test_sft
   max_train_examples: 20000
   max_val_examples: 1500
   max_test_examples: 1500

@@ -1,8 +1,8 @@
-"""LoRA fine-tuning of a small pretrained Transformer on DailyDialog.
+"""LoRA fine-tuning of a small pretrained Transformer on UltraChat.
 
 This is the general-English track, not the from-scratch concept experiment.
 The base model supplies English; LoRA adapts it to short, friendly replies.
-Evaluation is on held-out DailyDialog pairs (loss/perplexity plus samples).
+Evaluation is on held-out UltraChat pairs (loss/perplexity plus samples).
 """
 
 from __future__ import annotations
