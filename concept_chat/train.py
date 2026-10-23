@@ -309,11 +309,17 @@ def aggregate(results: list[dict], split_names: list[str]) -> dict:
                 continue
             vals = [r["tests"][split]["exact"] for r in runs_with]
             f1s = [r["tests"][split]["f1"] for r in runs_with]
+            concept_vals = [
+                r["tests"][split]["concept_acc"]
+                for r in runs_with
+                if r["tests"][split]["concept_acc"] is not None
+            ]
             out[variant][split] = {
                 "n": runs_with[0]["tests"][split]["n"],
                 "exact_mean": statistics.mean(vals),
                 "exact_std": statistics.pstdev(vals) if len(vals) > 1 else 0.0,
                 "f1_mean": statistics.mean(f1s),
+                "concept_mean": statistics.mean(concept_vals) if concept_vals else None,
             }
         concept_vals = [r["tests"][split_names[0]]["concept_acc"] for r in runs if r["tests"][split_names[0]]["concept_acc"] is not None]
         out[variant]["concept_acc"] = statistics.mean(concept_vals) if concept_vals else None
@@ -336,7 +342,8 @@ def write_report(path: Path, corpus: Corpus, results: list[dict], agg: dict, cfg
     for name, examples in corpus.tests.items():
         lines.append(f"- {name}: {len(examples)}")
     lines += ["", "## Held-out results (exact match, mean ± std over seeds)", "",
-              "| variant | split | n | exact | token F1 |", "|---|---|---:|---:|---:|"]
+              "| variant | split | n | exact | token F1 | concept acc |",
+              "|---|---|---:|---:|---:|---:|"]
     for variant, splits in agg.items():
         for split, values in splits.items():
             if split == "concept_acc":
@@ -344,7 +351,8 @@ def write_report(path: Path, corpus: Corpus, results: list[dict], agg: dict, cfg
             lines.append(
                 f"| {variant} | {split} | {values['n']} | "
                 f"{values['exact_mean']*100:.1f} ± {values['exact_std']*100:.1f}% | "
-                f"{values['f1_mean']*100:.1f}% |"
+                f"{values['f1_mean']*100:.1f}% | "
+                f"{(values['concept_mean']*100 if values['concept_mean'] is not None else float('nan')):.1f}% |"
             )
     lines += ["", "## Per-concept exact match (best checkpoint, concept variant)", ""]
     concept_rows = [r for r in results if r["variant"] == "concept"]
@@ -352,12 +360,14 @@ def write_report(path: Path, corpus: Corpus, results: list[dict], agg: dict, cfg
         best = max(concept_rows, key=lambda r: r["best_val_exact"])
         lines.append("| concept | n | exact |")
         lines.append("|---|---:|---:|")
-        merged: dict[str, list[float]] = {}
+        merged: dict[str, list[tuple[int, float]]] = {}
         for split in corpus.tests:
             for concept, values in best["tests"][split]["per_concept"].items():
-                merged.setdefault(concept, []).append(values["exact"])
+                merged.setdefault(concept, []).append((values["n"], values["exact"]))
         for concept, values in sorted(merged.items()):
-            lines.append(f"| {concept} | - | {statistics.mean(values)*100:.1f}% |")
+            total = sum(n for n, _ in values)
+            correct = sum(n * exact for n, exact in values)
+            lines.append(f"| {concept} | {total} | {correct/total*100:.1f}% |")
     lines += ["", "## Notes", "",
               "- `concept` variant gets a concept label/classifier; `baseline` does not.",
               "- `oracle_concept` generation uses the true concept; the default uses the",

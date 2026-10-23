@@ -25,6 +25,17 @@ class DataTests(unittest.TestCase):
         for name, examples in self.corpus.tests.items():
             self.assertGreater(len(examples), 20, name)
 
+    def test_canonical_chat_prompts_are_trained(self):
+        users = {example.user for example in self.corpus.train}
+        for prompt in [
+            "hi", "hello", "what is your name", "i am sad", "i want an apple",
+            "what sound does a cow make", "good night",
+            "the ball is red what color is the ball",
+            "the cat is under the table where is the cat",
+            "i see three apples how many apples",
+        ]:
+            self.assertIn(prompt, users, prompt)
+
     def test_no_train_leak_into_test(self):
         train = {(e.user, e.reply) for e in self.corpus.train}
         for name, examples in self.corpus.tests.items():

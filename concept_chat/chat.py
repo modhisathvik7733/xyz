@@ -112,7 +112,7 @@ def main() -> None:
             print(f"[unknown words -> <unk>: {', '.join(oov)}]")
         src = torch.tensor([encode(text, vocab, max_src)], dtype=torch.long, device=device)
         generated, predicted = model.generate(
-            src, max_len, concept_override=concept_override
+            src, max_len, concept_override=concept_override, repetition_penalty=1.2
         )
         reply = decode(generated[0], itos)
         if predicted is not None:

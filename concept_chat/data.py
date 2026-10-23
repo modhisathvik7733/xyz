@@ -63,6 +63,10 @@ def _slots(**kwargs) -> dict[str, str]:
     return kwargs
 
 
+def _article(word: str) -> str:
+    return "an" if word[:1].lower() in "aeiou" else "a"
+
+
 def concept_specs() -> list[ConceptSpec]:
     specs: list[ConceptSpec] = []
 
@@ -135,19 +139,19 @@ def concept_specs() -> list[ConceptSpec]:
     ], [_slots()]))
 
     colors = [
-        _slots(object=obj, color=color)
+        _slots(object=obj, color=color, article=_article(color))
         for obj in ["ball", "car", "cup", "hat", "book", "flower", "box", "chair", "bag", "shoe"]
         for color in ["red", "blue", "green", "yellow", "black", "white", "pink", "orange"]
     ]
     specs.append(ConceptSpec("colors", [
         _t("colors", 0, "the {object} is {color} what color is the {object}", "the {object} is {color}"),
-        _t("colors", 1, "i see a {color} {object} what color is the {object}", "it is {color}"),
-        _t("colors", 2, "look at the {color} {object} tell me the color of the {object}", "the {object} looks {color}"),
-        _t("colors", 3, "the {object} is {color} do you know its color", "i see a {color} {object}"),
-        _t("colors", 4, "here is a {color} {object} which color is the {object}", "the {object} is {color}"),
-        _t("colors", 5, "this {object} is {color} what color do you see", "it is a {color} {object}"),
+        _t("colors", 1, "i see {article} {color} {object} what color is the {object}", "it is {color}"),
+        _t("colors", 2, "look at the {article} {color} {object} tell me the color of the {object}", "the {object} looks {color}"),
+        _t("colors", 3, "the {object} is {color} do you know its color", "i see {article} {color} {object}"),
+        _t("colors", 4, "here is {article} {color} {object} which color is the {object}", "the {object} is {color}"),
+        _t("colors", 5, "this {object} is {color} what color do you see", "it is {article} {color} {object}"),
         _t("colors", 6, "the {object} is {color} can you tell me the color", "i see {color}"),
-        _t("colors", 7, "i have a {color} {object} what color is it", "the {object} is {color}"),
+        _t("colors", 7, "i have {article} {color} {object} what color is it", "the {object} is {color}"),
     ], colors))
 
     animals = [
@@ -160,15 +164,19 @@ def concept_specs() -> list[ConceptSpec]:
     ]
     # Deduplicate animal slot dictionaries while preserving order.
     animals = list({(s["animal"], s["sound"]): s for s in animals}.values())
+    animals = [
+        _slots(animal=s["animal"], sound=s["sound"], article=_article(s["animal"]))
+        for s in animals
+    ]
     specs.append(ConceptSpec("animals", [
-        _t("animals", 0, "what sound does a {animal} make", "a {animal} says {sound}"),
-        _t("animals", 1, "what does a {animal} say", "the {animal} says {sound}"),
+        _t("animals", 0, "what sound does {article} {animal} make", "{article} {animal} says {sound}"),
+        _t("animals", 1, "what does {article} {animal} say", "the {animal} says {sound}"),
         _t("animals", 2, "what noise does a {animal} make", "{animal} says {sound}"),
-        _t("animals", 3, "can you tell me the sound of a {animal}", "it says {sound}"),
-        _t("animals", 4, "how does a {animal} talk", "a {animal} says {sound}"),
+        _t("animals", 3, "can you tell me the sound of {article} {animal}", "it says {sound}"),
+        _t("animals", 4, "how does {article} {animal} talk", "{article} {animal} says {sound}"),
         _t("animals", 5, "what does the {animal} sound like", "the {animal} says {sound}"),
-        _t("animals", 6, "tell me the sound a {animal} makes", "{animal} says {sound}"),
-        _t("animals", 7, "do you know what a {animal} says", "yes it says {sound}"),
+        _t("animals", 6, "tell me the sound {article} {animal} makes", "{animal} says {sound}"),
+        _t("animals", 7, "do you know what {article} {animal} says", "yes it says {sound}"),
     ], animals))
 
     counting = []
@@ -221,14 +229,14 @@ def concept_specs() -> list[ConceptSpec]:
         _slots(item="ice cream", article="an"), _slots(item="toy", article="a"),
     ]
     specs.append(ConceptSpec("wants", [
-        _t("wants", 0, "i want {item}", "here is {article} {item}"),
-        _t("wants", 1, "can i have {item}", "yes here is {article} {item}"),
-        _t("wants", 2, "i would like {item}", "of course here is {article} {item}"),
-        _t("wants", 3, "please give me {item}", "you can have {article} {item}"),
-        _t("wants", 4, "may i have {item}", "yes here is {article} {item}"),
-        _t("wants", 5, "i am hungry for {item}", "here is {article} {item}"),
-        _t("wants", 6, "i want to eat {item}", "here is {article} {item}"),
-        _t("wants", 7, "can you give me {item}", "yes here is {article} {item}"),
+        _t("wants", 0, "i want {article} {item}", "here is {article} {item}"),
+        _t("wants", 1, "can i have {article} {item}", "yes here is {article} {item}"),
+        _t("wants", 2, "i would like {article} {item}", "of course here is {article} {item}"),
+        _t("wants", 3, "please give me {article} {item}", "you can have {article} {item}"),
+        _t("wants", 4, "may i have {article} {item}", "yes here is {article} {item}"),
+        _t("wants", 5, "i am hungry for {article} {item}", "here is {article} {item}"),
+        _t("wants", 6, "i want to eat {article} {item}", "here is {article} {item}"),
+        _t("wants", 7, "can you give me {article} {item}", "yes here is {article} {item}"),
     ], wants))
 
     likes = [_slots(thing=t) for t in [
@@ -320,6 +328,72 @@ def _split_indices(count: int, rng: random.Random, train_frac: float = 0.6,
     return train, val, test
 
 
+def _split_templates(count: int, rng: random.Random) -> tuple[list[int], list[int], list[int]]:
+    """Keep the canonical first two prompts in train, hold out paraphrases.
+
+    The canonical prompts are what the interactive chat examples use.  Holding
+    them out makes chat look broken even when the slot/composition test works.
+    """
+    forced = [index for index in (0, 1) if index < count]
+    rest = [index for index in range(count) if index not in forced]
+    rng.shuffle(rest)
+    n_train = max(len(forced), int(round(count * 0.6)))
+    train = forced + rest[: max(0, n_train - len(forced))]
+    remaining = rest[max(0, n_train - len(forced)) :]
+    n_val = max(1, int(round(count * 0.2))) if len(remaining) > 1 else 0
+    val = remaining[:n_val]
+    test = remaining[n_val:]
+    if not test and val:
+        test = [val.pop()]
+    return train, val, test
+
+
+def _split_slots(count: int, rng: random.Random, forced: list[int]) -> tuple[list[int], list[int], list[int]]:
+    rest = [index for index in range(count) if index not in forced]
+    rng.shuffle(rest)
+    n_train = max(len(forced), int(round(count * 0.7)))
+    train = forced + rest[: max(0, n_train - len(forced))]
+    remaining = rest[max(0, n_train - len(forced)) :]
+    n_val = max(1, int(round(count * 0.15))) if len(remaining) > 1 else 0
+    val = remaining[:n_val]
+    test = remaining[n_val:]
+    if not test and val:
+        test = [val.pop()]
+    return train, val, test
+
+
+CANONICAL_SLOTS = {
+    "colors": [
+        {"object": "ball", "color": "red"},
+        {"object": "ball", "color": "blue"},
+    ],
+    "animals": [
+        {"animal": "cow", "sound": "moo"},
+        {"animal": "cat", "sound": "meow"},
+        {"animal": "dog", "sound": "woof"},
+    ],
+    "counting": [
+        {"number": "three", "plural": "apples"},
+        {"number": "one", "plural": "apples"},
+        {"number": "two", "plural": "apples"},
+    ],
+    "prepositions": [
+        {"object": "cat", "prep": "under", "place": "table"},
+        {"object": "cat", "prep": "on", "place": "table"},
+        {"object": "ball", "prep": "on", "place": "table"},
+    ],
+    "wants": [
+        {"item": "apple", "article": "an"},
+        {"item": "banana", "article": "a"},
+    ],
+    "likes": [{"thing": "cats"}, {"thing": "dogs"}],
+    "feelings": [
+        {"feeling": "sad", "comfort": "i am sorry you are sad do you want a hug"},
+        {"feeling": "happy", "comfort": "i am glad you are happy"},
+    ],
+}
+
+
 def _make_examples(spec: ConceptSpec, template_indices: Iterable[int],
                    slot_indices: Iterable[int]) -> list[Example]:
     out: list[Example] = []
@@ -354,11 +428,18 @@ def build_corpus(seed: int = 1234) -> Corpus:
     for spec in specs:
         n_t = len(spec.templates)
         n_s = len(spec.slots)
-        t_train, t_val, t_test = _split_indices(n_t, rng, 0.6, 0.2)
+        t_train, t_val, t_test = _split_templates(n_t, rng)
+        forced_slots = []
+        for wanted in CANONICAL_SLOTS.get(spec.name, []):
+            for index, slot in enumerate(spec.slots):
+                if all(slot.get(key) == value for key, value in wanted.items()):
+                    forced_slots.append(index)
+                    break
+        forced_slots = sorted(set(forced_slots))
         if n_s == 1:
             s_train, s_val, s_test = [0], [], []
         else:
-            s_train, s_val, s_test = _split_indices(n_s, rng, 0.7, 0.15)
+            s_train, s_val, s_test = _split_slots(n_s, rng, forced_slots)
 
         c_train = _make_examples(spec, t_train, s_train)
         c_val = _make_examples(spec, t_val, s_train) + _make_examples(spec, t_train, s_val)

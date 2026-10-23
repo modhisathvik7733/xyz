@@ -95,6 +95,7 @@ class ConceptSeq2Seq(nn.Module):
         src: torch.Tensor,
         max_len: int,
         concept_override: int | torch.Tensor | None = None,
+        repetition_penalty: float = 1.0,
     ) -> tuple[list[list[int]], torch.Tensor | None]:
         enc_out, hidden, concept_logits = self.encode(src)
         if self.use_concept:
@@ -130,6 +131,14 @@ class ConceptSeq2Seq(nn.Module):
                 self.gen_gate(torch.cat((dec_h, context, emb_prev), dim=-1))
             )
             probs = p_gen * gen_probs + (1.0 - p_gen) * copy_probs
+            if repetition_penalty != 1.0:
+                for row in range(probs.shape[0]):
+                    if output[row]:
+                        seen = torch.tensor(
+                            sorted(set(output[row])), dtype=torch.long, device=probs.device
+                        )
+                        probs[row, seen] = probs[row, seen] / repetition_penalty
+                        probs[row] = probs[row] / probs[row].sum().clamp_min(1e-9)
             next_token = probs.argmax(dim=-1)
             for row in range(batch):
                 if not finished[row]:

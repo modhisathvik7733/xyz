@@ -5,6 +5,7 @@ A **proper small-scale test**, not a scripted demo:
 - synthetic English dialogue corpus with 13 concepts;
 - train/validation/held-out splits at both **template** and **slot-combination** level;
 - concept-conditioned GRU encoder–decoder with attention and **copy**;
+- correct `a`/`an` articles in color, animal, and want prompts;
 - parameter-matched baseline without concept conditioning;
 - test report with exact match, token F1, concept accuracy, and per-concept results;
 - interactive chat for qualitative checking.
@@ -30,6 +31,17 @@ Grammar/behavior patterns include:
 - polite replies;
 - concept-conditioned reply selection.
 
+**Canonical chat prompts and their slots are always in the training split.**
+The test split holds out rarer paraphrases and slot combinations; otherwise
+“hi”, “what is your name”, “the ball is red…”, and “i see three apples…” would
+be held out and chat would look broken even when the compositional test works.
+
+This was the main bug in the first GPU run: the split held out “hi” and
+“what is your name”, so the chat model had never seen them. The report showed
+95% on seen-template/unseen-slot but only ~5% on unseen templates. The revised
+split keeps the canonical chat examples in train while still holding out
+paraphrases and slot combinations for the measured test.
+
 The context is part of the user message for information-bearing questions, e.g.:
 
 ```text
@@ -48,6 +60,7 @@ not answerable. The model must extract and copy the evidence.
 - Concept classifier trained jointly with the reply loss.
 - **Pointer-generator copy** over the source message, so slot values can be
   copied rather than hallucinated.
+- Greedy decoding with an optional repetition penalty in chat.
 - ~0.8M parameters; fits easily on an RTX 3080 20GB.
 - Parameter-matched baseline: same encoder/decoder/copy, no concept embedding or
   concept classifier.
@@ -157,7 +170,21 @@ three held-out splits, not one cherry-picked chat reply. Good signs:
 
 A low exact match with high token F1 usually means the reply is close but
 copies the wrong slot value or uses a different paraphrase. The report includes
-both numbers.
+both numbers. The **concept accuracy** column tells you whether a failure is the
+concept classifier or the language decoder.
+
+In the first run, the 95% seen-template/unseen-slot result showed that copy and
+slot composition worked. The 5% unseen-template result showed that the model
+had not learned paraphrase grammar. The chat errors (“hi” → wants) were the
+same split bug plus a weak no-slot concept classifier. This revision keeps the
+canonical prompts in train, balances no-slot concepts, and fixes articles; rerun
+the report before judging the new model.
+
+The `test_unseen_templates_*` split is intentionally hard: the model must
+produce a reply for a paraphrase it never saw. A low score there is a
+paraphrase-generalization limitation, not necessarily a broken chat model —
+the canonical chat prompts are in the training split. Use the concept and
+oracle columns to separate the two issues.
 
 ## Limitations
 
