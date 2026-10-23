@@ -6,7 +6,7 @@ LiteMoD keeps the dense model's parameter count but does **not** run every token
 
 This repo contains the full TinyStories pipeline, a dense baseline, a wall-clock speed benchmark, and the exact commands to run both on a Vast.ai GPU.
 
-> **Status:** the code was generated and pushed without a local GPU run (per request). No measured benchmark numbers are hard-coded in this README; the table above is analytical. `src/bench.py` is the source of truth for speed on your GPU.
+> **Status:** the 42M proxy has one real reference measurement on an RTX 5060 Ti (1.38× at 512/32, bf16, `torch.compile`) in [docs/MEASURED_5060TI.md](docs/MEASURED_5060TI.md). The 1B projections are analytical and live in [docs/SCALING_PLAN.md](docs/SCALING_PLAN.md). `src/bench.py` is the source of truth for speed on your GPU.
 
 ---
 
@@ -26,7 +26,7 @@ Both models use:
 
 The **only** architectural difference is that 10 of the 12 blocks in LiteMoD are `MoDBlock`s. Blocks 0 and 11 stay dense. The fast model adds only the routers (~5k parameters total).
 
-The table is an analytical estimate (3× forward-pass model FLOPs for forward + backward), not a measurement. At capacity 0.5 the theoretical active-FLOP reduction at 512 tokens is **~37%**, so the idealized FLOP-ratio ceiling is **~1.59×**. Real wall-clock speedup is lower because the LM head and the smaller GEMMs do not shrink, and it depends on the GPU. Run the benchmark to get the real number.
+The table is an analytical estimate (3× forward-pass model FLOPs for forward + backward), not a measurement. At capacity 0.5 the theoretical active-FLOP reduction at 512 tokens is **~37%**, so the idealized FLOP-ratio ceiling is **~1.59×**. Real wall-clock speedup is lower because the LM head and the smaller GEMMs do not shrink, and it depends on the GPU. The measured 42M reference is **1.22–1.39×** on an RTX 5060 Ti (see [docs/MEASURED_5060TI.md](docs/MEASURED_5060TI.md)).
 
 ---
 
@@ -116,7 +116,51 @@ bash scripts/speed_check.sh
 
 Start with `--batch-sizes 8,16 --seq-lens 256,512` if you are on a 24 GB card and want a quick run. OOM combinations are skipped automatically and marked in the JSON.
 
-### 3. Train both models
+For the long-context question, test 1024 as well (the MoD advantage grows with
+sequence length):
+
+```bash
+bash scripts/speed_check.sh --batch-sizes 16,32 --seq-lens 512,1024
+```
+
+### 3. 1200-step speed + accuracy decision run
+
+Do this before spending time on a full training run. It trains dense and fast
+for **1200 optimizer steps** (39.3M tokens each), then writes a side-by-side
+report with throughput, final/best validation loss, and validation loss at
+equal wall-clock.
+
+```bash
+bash scripts/run_1200.sh
+
+# try a more aggressive routing capacity (speed up, quality down)
+CAPACITY=0.4 bash scripts/run_1200.sh
+```
+
+Outputs:
+
+```text
+runs/dense_1200/metrics.csv
+runs/fast_1200/metrics.csv
+runs/compare_1200.md       # headline table + equal-time val loss
+runs/compare_1200.json
+runs/compare_1200.png
+```
+
+On the reference RTX 5060 Ti this is roughly 15 minutes including compile and
+evaluation (dense ~6.3 min of pure training, fast ~4.6 min). It is a
+speed/quality **triage** on 39.3M tokens, not a final model-quality claim.
+
+Inspect it with:
+
+```bash
+cat runs/compare_1200.md
+```
+
+The report explicitly answers: *did the fast model get faster, and what did
+that cost in validation loss at the end of the same 1200 steps?*
+
+### 4. Train both models (optional longer run)
 
 ```bash
 mkdir -p runs
@@ -158,7 +202,7 @@ python -m src.train --config configs/fast_tiny.yaml \
   --set model.mod_capacity=0.6 --compile
 ```
 
-### 4. Plot the comparison
+### 5. Plot the comparison
 
 ```bash
 python analysis/plot.py \
@@ -198,6 +242,47 @@ The training CSV (`runs/*/metrics.csv`) also logs `tok_per_sec`, `val_loss`, `gr
 
 ---
 
+## Scaling to 1B / 200B tokens / 256k
+
+The 42M model is a **proxy**, not the target. A 1B dense model trained on 200B
+tokens at full 256k attention is not a $150 workload. The full research and
+budget analysis is in [docs/SCALING_PLAN.md](docs/SCALING_PLAN.md); the
+calculator is `src/plan.py`.
+
+At 8× RTX 4090 at **$0.13/GPU-hour**, 35% MFU, $150 buys **1,154 GPU-hours**
+(144 wall-hours on 8 GPUs), which requires **~385k tokens/sec aggregate** for
+200B tokens:
+
+| target | est. cost |
+|---|---:|
+| dense 1B, full 8k | ~$1,204 |
+| dense 1B, full 256k | ~$15,253 |
+| 100M-active MoE, full 8k | ~$528 |
+| 100M-active MoE, 4k local | ~$302 |
+| 100M-active MoE, hybrid 8k + 1% at 256k | **~$149** |
+| 120M-active MoE, same | ~$164 |
+| 150M-active MoE, same | ~$186 |
+
+The only path close to $150 is **1B total / ~100M active + hybrid linear/local
+attention + staged 256k**, and it is tight. That number is **GPU rental only**;
+it excludes data curation, storage/egress, failed runs, and engineering time.
+A realistic budget is **$200–300** after restarts and overhead. Full 256k
+attention on all 200B tokens is two orders of magnitude over budget.
+
+```bash
+python -m src.plan
+python -m src.plan --gpu a100 --gpus 1
+python -m src.plan --gpu h100 --gpus 8 --mfu 0.40
+```
+
+The recommended v2 architecture (MoE + Gated DeltaNet/local attention +
+NSA/MoBA long-context blocks + Muon, FSDP over 8×4090) is specified in the
+scaling plan. **It is not implemented in this repo yet.** The current repo is a
+single-GPU 42M proxy and should not be stretched directly to 1B; the next
+engineering step is a 1B microbenchmark in a real distributed stack.
+
+---
+
 ## Repo layout
 
 ```text
@@ -211,12 +296,18 @@ The training CSV (`runs/*/metrics.csv`) also logs `tok_per_sec`, `val_loss`, `gr
 │   ├── data.py               # memmap packed-token sampler
 │   ├── prepare_data.py       # TinyStories download, BPE training, packing
 │   ├── train.py              # training loop, AMP, compile, CSV, checkpoints
-│   └── bench.py              # wall-clock dense-vs-fast benchmark
+│   ├── bench.py              # wall-clock dense-vs-fast benchmark
+│   ├── compare_runs.py       # 1200-step speed/quality report
+│   └── plan.py               # 1B / 200B / 256k budget calculator
 ├── analysis/plot.py          # training curves -> runs/compare.png
+├── docs/
+│   ├── MEASURED_5060TI.md    # 42M reference measurement
+│   └── SCALING_PLAN.md       # 1B research + budget plan
 ├── scripts/
 │   ├── setup_vastai.sh
 │   ├── prepare_data.sh
 │   ├── speed_check.sh
+│   ├── run_1200.sh
 │   └── train_both.sh
 ├── requirements.txt
 └── README.md
@@ -251,6 +342,7 @@ python -m src.flops --seq-len 512
 - **No bf16 support** (V100/T4-class): add `--set train.dtype=fp16` to training. The benchmark accepts `--dtype fp16`.
 - **SSH disconnects:** run inside `tmux` (`apt-get update && apt-get install -y tmux` if missing) and use `tee` logs.
 - **Hugging Face download issues:** set `HF_HOME=/workspace/.hf` and re-run `scripts/prepare_data.sh`; the dataset is public and needs no token.
+- **Trying to train 1B on the 5060 Ti:** don't. A 1B model needs FSDP/ZeRO across 8×24GB or an 80GB card, and 256k context needs sparse/context-parallel kernels. Use `src/plan.py` and the scaling plan first.
 
 ---
 
@@ -262,7 +354,8 @@ python -m src.flops --seq-len 512
 - **Wall-clock < FLOP ratio.** The LM head, small matrix multiplications, router/gather/scatter overhead, and kernel launch latency eat into the theoretical 1.59×. On a 4090/A100, expect a smaller measured speedup; the benchmark reports it honestly.
 - **Fixed top-k at eval.** This implementation uses deterministic capacity routing for both training and validation. It does not implement per-token thresholded inference or a KV-cache-aware generation path.
 - **Single GPU.** The training loop is intentionally single-process/single-GPU; there is no DDP wrapper. A multi-GPU run would need a distributed sampler and DDP around the model.
-- **No local test was run.** This machine has no CUDA GPU, and the request explicitly said not to run a local test. Static checks were limited to syntax/config validation.
+- **The 42M measurement is a proxy.** The 1B/200B/256k projections in [docs/SCALING_PLAN.md](docs/SCALING_PLAN.md) are analytical; they are not a 1B training result.
+- **No local test was run.** This machine has no CUDA GPU, and the request explicitly said not to run a local test. Static checks were limited to syntax/config validation. The 5060 Ti reference was run by the repo owner.
 
 ---
 
@@ -271,6 +364,7 @@ python -m src.flops --seq-len 512
 - Raposo et al., *Mixture-of-Depths: Dynamically allocating compute in transformer-based language models*, arXiv:2404.02258 (2024).
 - Eldan & Li, *TinyStories: How Small Can Language Models Be and Still Speak Coherent English?*, arXiv:2305.07759 (2023).
 - GPT-2 / nanoGPT for the transformer baseline conventions; SwiGLU and GQA follow the LLaMA family.
+- The 1B long-context research summary (DeepSeek-V3, Qwen3-Next, NSA, MoBA, Muon, MiniMax-01, Chinchilla) is in [docs/SCALING_PLAN.md](docs/SCALING_PLAN.md).
 
 ## License
 
