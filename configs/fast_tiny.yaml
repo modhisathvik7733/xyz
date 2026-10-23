@@ -1,0 +1,43 @@
+# LiteMoD: identical parameter count to the dense baseline, but blocks 1..10
+# (0-indexed) only process the top 50% of tokens by router score.
+model:
+  arch: mod
+  vocab_size: 16384          # overwritten by data/meta.json at train time
+  block_size: 512
+  n_layer: 12
+  n_head: 8
+  n_kv_head: 2
+  n_embd: 512
+  mlp_hidden: 1408
+  dropout: 0.0
+  rope_theta: 10000.0
+  norm_eps: 1.0e-5
+  tied_embeddings: true
+
+  mod_capacity: 0.5          # fraction of tokens processed by each MoD block
+  mod_first_dense: true      # keep block 0 dense for stable features
+  mod_last_dense: true       # keep block 11 dense so every token reaches the head
+  mod_aux_weight: 0.01       # weight on the router BCE loss
+  mod_router_z_weight: 0.001 # keeps router logits small
+  mod_router_noise: 0.5      # Gumbel exploration during training only
+
+train:
+  data_dir: data
+  out_dir: runs/fast_tiny
+  batch_size: 32
+  grad_accum: 2
+  max_steps: 4000            # same number of optimizer steps as dense
+  lr: 5.0e-4
+  min_lr_ratio: 0.1
+  warmup_steps: 200
+  weight_decay: 0.1
+  betas: [0.9, 0.95]
+  grad_clip: 1.0
+  dtype: bf16
+  compile: false             # pass --compile on the GPU
+  log_interval: 10
+  eval_interval: 250
+  eval_iters: 50
+  save_interval: 500
+  val_seed: 12345
+  seed: 1337

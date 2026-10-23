@@ -1,0 +1,44 @@
+# Dense baseline: same width/depth/tokenizer/optimizer as configs/fast_tiny.yaml.
+# It has no routing; every token goes through all 12 blocks.
+model:
+  arch: dense
+  vocab_size: 16384          # overwritten by data/meta.json at train time
+  block_size: 512
+  n_layer: 12
+  n_head: 8
+  n_kv_head: 2               # GQA for both models, so only routing differs
+  n_embd: 512
+  mlp_hidden: 1408
+  dropout: 0.0
+  rope_theta: 10000.0
+  norm_eps: 1.0e-5
+  tied_embeddings: true
+
+  # Unused when arch=dense, kept so the two configs stay structurally identical.
+  mod_capacity: 0.5
+  mod_first_dense: true
+  mod_last_dense: true
+  mod_aux_weight: 0.01
+  mod_router_z_weight: 0.001
+  mod_router_noise: 0.5
+
+train:
+  data_dir: data
+  out_dir: runs/dense_tiny
+  batch_size: 32
+  grad_accum: 2
+  max_steps: 4000            # 4000 * 32 * 2 * 512 = 131.1M tokens
+  lr: 5.0e-4
+  min_lr_ratio: 0.1
+  warmup_steps: 200
+  weight_decay: 0.1
+  betas: [0.9, 0.95]
+  grad_clip: 1.0
+  dtype: bf16
+  compile: false             # pass --compile on the GPU
+  log_interval: 10
+  eval_interval: 250
+  eval_iters: 50
+  save_interval: 500
+  val_seed: 12345
+  seed: 1337

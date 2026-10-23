@@ -1,0 +1,9 @@
+# PyTorch itself is provided by the Vast.ai PyTorch image.
+# If your image does not have it, install torch >= 2.3 with the CUDA wheel for
+# your driver before running this file.
+datasets>=2.19.0
+tokenizers>=0.15.0
+numpy>=1.24
+PyYAML>=6.0
+tqdm>=4.66
+matplotlib>=3.8
