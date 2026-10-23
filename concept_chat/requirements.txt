@@ -1,0 +1,3 @@
+# PyTorch is provided by the Vast.ai image (CUDA) or the existing M1 environment.
+# Install torch >= 2.0 with the correct backend before this file if missing.
+PyYAML>=6.0

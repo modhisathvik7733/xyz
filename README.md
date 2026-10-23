@@ -6,6 +6,11 @@ LiteMoD keeps the dense model's parameter count but does **not** run every token
 
 This repo contains the full TinyStories pipeline, a dense baseline, a wall-clock speed benchmark, and the exact commands to run both on a Vast.ai GPU.
 
+> **New addition:** [ConceptChat](concept_chat/README.md) — a small synthetic
+> baby-English dialogue model with concept conditioning, held-out
+> template/slot tests, and an interactive chat mode. It is a separate
+> experiment from the LiteMoD speed benchmark.
+
 > **Status:** the 42M proxy has one real reference measurement on an RTX 5060 Ti (1.38× at 512/32, bf16, `torch.compile`) in [docs/MEASURED_5060TI.md](docs/MEASURED_5060TI.md). The 1B projections are analytical and live in [docs/SCALING_PLAN.md](docs/SCALING_PLAN.md). `src/bench.py` is the source of truth for speed on your GPU.
 
 ---

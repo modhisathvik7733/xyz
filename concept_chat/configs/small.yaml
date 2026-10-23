@@ -1,0 +1,23 @@
+data:
+  seed: 1234
+
+model:
+  emb: 128
+  hidden: 256
+  dropout: 0.2
+
+train:
+  batch_size: 128
+  eval_batch_size: 128
+  epochs: 40
+  lr: 1.0e-3
+  weight_decay: 1.0e-4
+  clip: 1.0
+  concept_loss_weight: 0.5
+  balanced_concepts: true
+  balanced_sampling: true
+  patience: 8
+  seeds: [0, 1, 2]
+  out_dir: concept_chat/runs
+
+variants: [concept, baseline]
